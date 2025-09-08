@@ -1,22 +1,56 @@
 ############## Nettoyage et préparation des données de theses.fr ##############
   
 
+#'
 
-# Packages --------------------------------------------------------------------
+## Packages -------------------------------------------------------------------
 library(tidyverse) # Pour manipuler les données 
 library(data.table) # Pour une manipulation plus rapide 
 library(arrow) # Permet d'importer et exporter des fichiers parquet
+library(here) # Création de chemin d'accès 
 
 
-# Données --------------------------------------------------------------
+## Données --------------------------------------------------------------------
 
 # Chemin vers les données
-data_path <- here::here("data", "theses_fr.parquet")
+data_path <- here::here("data", "theses_datagouv.parquet")
 
 # Import des données
-theses <- read_parquet(data_path)
-theses <- as.data.table(theses) # Pour une manipulation plus rapide
+theses_datagouv <- read_parquet(data_path)
+theses_datagouv <- as.data.table(theses_datagouv) # Pour une manipulation plus rapide
 
+
+## Création de nouveaux jeux de données ---------------------------------------
+#' Séparation des données de data.gouv en quatre jeux de données :
+#' - `datagouv_metadata`: Core metadata about each thesis.
+#' - `datagouv_edge`: Links between theses and associated entities (individuals and institutions).
+#' - `datagouv_individual`: Information about individuals involved in the theses.
+#' - `datagouv_institution`: Information about institutions linked to the theses.
+
+
+# Table metadata ----------------------------------------------------------- 
+#' Création d'une table métadonnées
+datagouv_metadata <- 
+  theses_datagouv %>% 
+  select(
+    nnt,
+    date_soutenance,
+    langues.0,
+    langues.1,
+    titres.fr,
+    titres.en,
+    titres.autre.0,
+    resumes.fr,
+    resumes.en,
+    resumes.autre.0,
+    contains("sujets_rameau"),
+    discipline,
+    accessible
+  )
+
+
+# Sauvegarde de la table métadonnées 
+datagouv_metadata %>% write_parquet(here("data", "datagouv_metadata"))
 
 # Nom des colonnes
 cols <- names(theses)

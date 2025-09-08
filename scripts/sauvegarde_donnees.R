@@ -15,7 +15,7 @@ library(arrow)
 
 # URL et chemin de données ----------------------------------------------------
 lien_url <- "https://object.files.data.gouv.fr/hydra-parquet/hydra-parquet/eb06a4f5-a9f1-4775-8226-33425c933272.parquet"
-data_path <- here::here("data", "theses_fr.parquet")
+data_path <- here::here("data", "theses_datagouv.parquet")
 
 
 # Téléchargement de données ---------------------------------------------------
