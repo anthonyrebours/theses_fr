@@ -8,12 +8,13 @@ library(tidyverse) # Pour manipuler les données
 library(data.table) # Pour une manipulation plus rapide 
 library(arrow) # Permet d'importer et exporter des fichiers parquet
 library(here) # Création de chemin d'accès 
-library(janitor)
+library(janitor) # Pour nettoyer noms de variables et repérer doublons
+library(stringi)
 
 
 ## Données --------------------------------------------------------------------
 # Chemin vers les données
-data_path <- here::here("data", "datagouv.parquet")
+data_path <- here("data", "datagouv.parquet")
 
 # Import des données
 datagouv <- read_parquet(data_path) # Pour importer les données .parquet
@@ -25,28 +26,59 @@ datagouv <- as.data.table(datagouv) # Pour une manipulation plus rapide
 rameau <- str_subset(names(datagouv), "sujets_rameau")
 datagouv <- datagouv %>% unite(col = "sujets_rameau", rameau, sep = " | ", na.rm = TRUE)
 
-#  Repérage de doublons 
+# Vérification identifiants nnt manquants
+datagouv %>% filter(is.na(nnt)) %>% view()
+
+#' Nous avons détecter une seule thèses sans identifiant, nous avons choisi
+#' d'ajouter manuellement l'id en réutilisant la typologie adopté par 
+#' thèses.fr
+datagouv <- 
+  datagouv %>% 
+  mutate(nnt = replace_na(nnt, "2022REN1SBIS")) 
+
+# Harmonisation des noms auteurs
+datagouv <- 
+  datagouv %>% 
+  mutate(auteur.nom = str_to_title(auteur.nom)) %>% 
+  mutate(auteur.nom = stri_trans_general(auteur.nom, id = "Latin-ASCII"))
+
+# Traitement des doublons
 datagouv %>% 
-  get_dupes(nnt) %>% 
-  select(nnt, accessible, contains("auteur"), cas, source) %>% view()
+  get_dupes(nnt, auteur.nom) %>% 
+  select(nnt, accessible, contains("auteur"), titres.fr, source) 
 
 #' Certains doublons sont essentiellement dû à des différences de saisie entre 
-#' STAR et le Sudoc, dans ces cas on 
-
- 
-doublons_nnt <- 
+#' STAR et le Sudoc, dans ces cas on souhaite privilégier les données de STAR
+#' qui sont les plus à jours et contiennent le plus de métadonnées (notamment 
+#' sur l'accessibilité en ligne ou le "cas" des thèses)
+datagouv <- 
   datagouv %>% 
-  group_by(nnt) %>% 
-  summarise(auteurs_diff = length(unique(auteur.nom))) %>% 
-  filter(auteurs_diff > 1) 
+  group_by(nnt, auteur.nom) %>% 
+  filter(
+    if (any(source == "star", na.rm = TRUE)) {
+      source == "star"
+    } else {
+      TRUE
+    }
+  ) %>% 
+  slice(1) %>% 
+  ungroup()
 
-datagouv %>% filter(nnt %in% doublons_nnt$nnt) %>% view()
+datagouv %>% 
+  get_dupes(nnt) %>% 
+  select(nnt, accessible, contains("auteur"), cas, source) 
+
+#' Une fois ces premiers cas de doublons éliminés, il nous reste encore  
+#' quelques cas qui sont dus à des erreurs d'écriture 
+
+datagouv  <- datagouv %>% filter(!(nnt == "2022UPASL034" & source == "sudoc"))
+  
 
 ## Séparation en plusieurs jeux de données ------------------------------------
 #' Nouvelles tables :
 #' - `datagouv_metadata`
-#' - `datagouv_individual`
-#' - `datagouv_institution`
+#' - `datagouv_individuals`
+#' - `datagouv_institutions`
 
 
 ## Table metadata -------------------------------------------------------------
