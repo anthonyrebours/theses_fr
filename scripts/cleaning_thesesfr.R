@@ -1,7 +1,8 @@
-############## Nettoyage et préparation des données de theses.fr ##############
+############## Nettoyage et préparation des données de datagouv.##############
   
 
-#'
+#' Ce script permet de prétraiter les données sauvegardées depuis datagouv.fr et 
+#' de les sauvegarder au format parquet sous différentes tables
 
 ## Packages -------------------------------------------------------------------
 library(tidyverse) # Pour manipuler les données 
@@ -22,9 +23,32 @@ datagouv <- as.data.table(datagouv) # Pour une manipulation plus rapide
 
 
 ## Pré-traitement des données -------------------------------------------------
+# Harmonisation des formats de variables
+datagouv <- 
+  datagouv %>% 
+  mutate(
+    across(
+      where(is.logical),
+      ~ as.character(.)
+    )
+  ) 
+
 # Regroupement de tous les sujets rameau en une seule variable 
 rameau <- str_subset(names(datagouv), "sujets_rameau")
 datagouv <- datagouv %>% unite(col = "sujets_rameau", rameau, sep = " | ", na.rm = TRUE)
+
+# Traitement directeurs de thèse inconnu
+datagouv <- 
+  datagouv %>% 
+  mutate(
+    across(
+      contains("directeurs"),
+      ~ na_if(
+        .,
+        "Directeur de thèse inconnu"
+      )
+    )
+  ) 
 
 # Vérification identifiants nnt manquants
 datagouv %>% filter(is.na(nnt)) %>% view()
@@ -42,15 +66,17 @@ datagouv <-
   mutate(auteur.nom = str_to_title(auteur.nom)) %>% 
   mutate(auteur.nom = stri_trans_general(auteur.nom, id = "Latin-ASCII"))
 
-# Traitement des doublons
+
+## Corrections des doublons ---------------------------------------------------
+# Vérification des doublons
 datagouv %>% 
   get_dupes(nnt, auteur.nom) %>% 
   select(nnt, accessible, contains("auteur"), titres.fr, source) 
 
-#' Certains doublons sont essentiellement dû à des différences de saisie entre 
-#' STAR et le Sudoc, dans ces cas on souhaite privilégier les données de STAR
-#' qui sont les plus à jours et contiennent le plus de métadonnées (notamment 
-#' sur l'accessibilité en ligne ou le "cas" des thèses)
+#' Certains doublons sont de véritables doublons qui sont
+#'  essentiellement dû à des différences de saisie entre STAR et le Sudoc, dans
+#' ces cas on souhaite privilégier les données de STAR qui sont les plus à jours 
+#' et contiennent le plus de métadonnées 
 datagouv <- 
   datagouv %>% 
   group_by(nnt, auteur.nom) %>% 
@@ -64,25 +90,50 @@ datagouv <-
   slice(1) %>% 
   ungroup()
 
+#' Une fois ces premiers cas de doublons éliminés, il nous reste encore quelques 
+#' cas pour lesquels seuls les numéros nnt sont en doublons et sont dus à des 
+#' erreurs d'écriture 
 datagouv %>% 
   get_dupes(nnt) %>% 
   select(nnt, accessible, contains("auteur"), cas, source) 
 
-#' Une fois ces premiers cas de doublons éliminés, il nous reste encore  
-#' quelques cas qui sont dus à des erreurs d'écriture 
-
+#' Parmi les doublons restants le cas ci-dessous provient d'une différence 
+#' d'écriture du nom et du prénom de l'auteur entre la version sudoc et STAR,
+#' on conserve manuellement la version STAR
 datagouv  <- datagouv %>% filter(!(nnt == "2022UPASL034" & source == "sudoc"))
-  
+
+#' Il ne reste plus que des doublons de nnt qui correspondent à thèses
+#' différentes, c'est-à-dire pour lesquelles la plupart des métadonnées (auteur, 
+#' titre, sujets...) sont différentes entre elles. Comme il ne s'agit pas de 
+#' véritables doublons on souhaite conserver les deux thèses, au lieu d'éliminer
+#' l'une des deux on va donc simplement modifier le numéro nnt d'une des deux 
+
+datagouv <- 
+  datagouv %>% 
+  group_by(nnt) %>% 
+  mutate(
+    nnt = ifelse(
+      row_number() > 1,
+      paste0(nnt, "_BIS", row_number() -1),
+      nnt
+    )
+  ) %>% 
+  ungroup()
+
 
 ## Séparation en plusieurs jeux de données ------------------------------------
+
+#' Après avoir prétraiter les données et corrigé certains doublons, nous allons
+#' séparer et sauvegarder le jeux de données en différentes tables et sous 
+#' format parquet
+
 #' Nouvelles tables :
 #' - `datagouv_metadata`
 #' - `datagouv_individuals`
 #' - `datagouv_institutions`
 
 
-## Table metadata -------------------------------------------------------------
-#' Création d'une table métadonnées
+# Table metadata 
 datagouv_metadata <- 
   datagouv %>% 
   select(
@@ -104,47 +155,30 @@ datagouv_metadata <-
     discipline
   ) 
 
-# Sauvegarde de la table métadonnées 
 datagouv_metadata %>% write_parquet(here("data", "datagouv_metadata.parquet"))
 
+# Table individuals
+datagouv %>% 
+  select(
+    nnt, 
+    contains("auteur"),
+    contains("directeurs"),
+    contains("membres"),
+    contains("president"),
+    contains("rapporteurs")
+  ) %>% 
+  write_parquet(here("data", "datagouv_individuals.parquet"))
 
-# Fusion nom et prenom --------------------------------------------------------
-# Extraction des préfixes complets
-prefixes <- unique(sub("\\.(nom|prenom)$", "", cols))
-
-# Pour chaque préfixe, fusionner les colonnes ayant ".nom" et ".prenom" en suffixe
-for (prefix in prefixes) {
-  nom_col <- paste0(prefix, ".nom")
-  prenom_col <- paste0(prefix, ".prenom")
-  
-  if (nom_col %in% cols && prenom_col %in% cols) {
-    theses <- 
-      theses %>% 
-      unite(
-        !!sym(prefix),
-        c(!!sym(nom_col), !!sym(prenom_col)),
-        sep = ", ",
-        na.rm = TRUE
-      )
-  }
-}
-
-theses <- 
-  theses %>% 
-  mutate(
-    across(
-      contains("idref"),
-      ~ ifelse(
-        !is.na(.), 
-        paste0("(",.,")"), 
-        NA_real_
-      )
-    )
-  )
-
-# Etablissements de soutenance
-
-
+# Table affiliations
+datagouv %>% 
+  select(
+    nnt, 
+    code_etab,
+    contains("etablissements"),
+    contains("ecole"),
+    contains("partenaires")
+  ) %>% 
+  write_parquet(here("data", "datagouv_affiliations.parquet"))
   
 
 
