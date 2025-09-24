@@ -12,7 +12,7 @@ library(tidyverse)
 
 # Données -----------------------------------------------------------------
 affiliations <- arrow::read_parquet(here::here("data", "datagouv_affiliations.parquet"))
-codes_etab <- rio::import(here::here("data", "codes_etab.xlsx"))
+codes_etab <- rio::import(here::here("data", "codes_etab.xlsx")) %>% as_tibble()
 
 
 
@@ -38,8 +38,21 @@ affiliations %>%
   left_join(codes_etab, by = c("code_etab" = "code")) %>% 
   janitor::get_dupes(nnt) %>% count(code_etab, etablissements_soutenance.0.nom) %>% view()
 
+univ_missing <- 
+  setdiff(
+    affiliations$etablissements_soutenance.0.nom, 
+    codes_etab$universites
+  )
 
+affiliations %>% 
+  filter(
+    etablissements_soutenance.0.nom %in% univ_missing &
+    is.na(etablissements_soutenance.0.idref)
+  ) %>% distinct(etablissements_soutenance.0.nom)
+  
 names(affiliations)
 theses_fr_kr %>% view()
 
-intersect(affiliations$etablissements_soutenance.0.nom, codes_etab$universites)
+
+setdiff(affiliations$code_etab, codes_etab$code)
+  

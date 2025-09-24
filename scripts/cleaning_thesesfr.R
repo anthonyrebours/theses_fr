@@ -1,10 +1,16 @@
-############## Nettoyage et préparation des données de datagouv.##############
+##%######################################################%##
+#                                                          #
+####  Nettoyage et préparation des données de datagouv  ####
+#                                                          #
+##%######################################################%##
+
   
 
 #' Ce script permet de prétraiter les données sauvegardées depuis datagouv.fr et 
 #' de les sauvegarder au format parquet sous différentes tables
 
-## Packages -------------------------------------------------------------------
+
+# Packages ----------------------------------------------------------------
 library(tidyverse) # Pour manipuler les données 
 library(data.table) # Pour une manipulation plus rapide 
 library(arrow) # Permet d'importer et exporter des fichiers parquet
@@ -13,17 +19,17 @@ library(janitor) # Pour nettoyer noms de variables et repérer doublons
 library(stringi)
 
 
-## Données --------------------------------------------------------------------
-# Chemin vers les données
+# Données -----------------------------------------------------------------
+## Chemin vers les données
 data_path <- here("data", "datagouv.parquet")
 
-# Import des données
+## Import des données
 datagouv <- read_parquet(data_path) # Pour importer les données .parquet
 datagouv <- as.data.table(datagouv) # Pour une manipulation plus rapide
 
 
-## Pré-traitement des données -------------------------------------------------
-# Harmonisation des formats de variables
+# Pré-traitement des données ----------------------------------------------
+## Harmonisation des formats de variables
 datagouv <- 
   datagouv %>% 
   mutate(
@@ -33,11 +39,11 @@ datagouv <-
     )
   ) 
 
-# Regroupement de tous les sujets rameau en une seule variable 
+## Regroupement de tous les sujets rameau en une seule variable 
 rameau <- str_subset(names(datagouv), "sujets_rameau")
 datagouv <- datagouv %>% unite(col = "sujets_rameau", rameau, sep = " | ", na.rm = TRUE)
 
-# Traitement directeurs de thèse inconnu
+## Traitement directeurs de thèse inconnu
 datagouv <- 
   datagouv %>% 
   mutate(
@@ -50,7 +56,7 @@ datagouv <-
     )
   ) 
 
-# Vérification identifiants nnt manquants
+## Vérification identifiants nnt manquants
 datagouv %>% filter(is.na(nnt)) %>% view()
 
 #' Nous avons détecter une seule thèses sans identifiant, nous avons choisi
@@ -60,18 +66,35 @@ datagouv <-
   datagouv %>% 
   mutate(nnt = replace_na(nnt, "2022REN1SBIS")) 
 
-# Harmonisation des noms auteurs
+## Harmonisation des noms auteurs
 datagouv <- 
   datagouv %>% 
   mutate(auteur.nom = str_to_title(auteur.nom)) %>% 
   mutate(auteur.nom = stri_trans_general(auteur.nom, id = "Latin-ASCII"))
 
+## Vérification code_etab manquants
+datagouv %>% count(is.na(code_etab))
 
-## Corrections des doublons ---------------------------------------------------
-# Vérification des doublons
+#' On cherche à vérifier que toutes les institutions disposent bien d'un code
+#' etab car cela va nous permettre de séparer établissements de soutenance vs 
+#' établissements de co-tutelle plus tard.Quand on repère des code_etab manquant 
+#' on les créé en reprenant l'information à partir du code nnt de la thèse
+datagouv <- 
+  datagouv %>% 
+  mutate(
+    code_etab = ifelse(
+      is.na(code_etab),
+      str_sub(nnt, 5, 8),
+      code_etab
+    )
+  )
+
+
+# Corrections des doublons ------------------------------------------------
+## Vérification des doublons
 datagouv %>% 
   get_dupes(nnt, auteur.nom) %>% 
-  select(nnt, accessible, contains("auteur"), titres.fr, source) 
+  select(nnt, accessible, contains("auteur"), source) 
 
 #' Certains doublons sont de véritables doublons qui sont
 #'  essentiellement dû à des différences de saisie entre STAR et le Sudoc, dans
@@ -102,7 +125,7 @@ datagouv %>%
 #' on conserve manuellement la version STAR
 datagouv  <- datagouv %>% filter(!(nnt == "2022UPASL034" & source == "sudoc"))
 
-#' Il ne reste plus que des doublons de nnt qui correspondent à thèses
+#' Il ne reste plus que des doublons de nnt qui correspondent à des thèses
 #' différentes, c'est-à-dire pour lesquelles la plupart des métadonnées (auteur, 
 #' titre, sujets...) sont différentes entre elles. Comme il ne s'agit pas de 
 #' véritables doublons on souhaite conserver les deux thèses, au lieu d'éliminer
@@ -121,7 +144,7 @@ datagouv <-
   ungroup()
 
 
-## Séparation en plusieurs jeux de données ------------------------------------
+# Séparation en plusieurs jeux de données ---------------------------------
 
 #' Après avoir prétraiter les données et corrigé certains doublons, nous allons
 #' séparer et sauvegarder le jeux de données en différentes tables et sous 
@@ -133,9 +156,8 @@ datagouv <-
 #' - `datagouv_institutions`
 
 
-# Table metadata 
-datagouv_metadata <- 
-  datagouv %>% 
+## Table metadata 
+datagouv %>% 
   select(
     nnt,
     date_soutenance,
@@ -153,11 +175,10 @@ datagouv_metadata <-
     resumes.autre.0,
     contains("sujets_rameau"),
     discipline
-  ) 
+  ) %>% 
+  write_parquet(here("data", "datagouv_metadata.parquet"))
 
-datagouv_metadata %>% write_parquet(here("data", "datagouv_metadata.parquet"))
-
-# Table individuals
+## Table individuals
 datagouv %>% 
   select(
     nnt, 
@@ -169,10 +190,11 @@ datagouv %>%
   ) %>% 
   write_parquet(here("data", "datagouv_individuals.parquet"))
 
-# Table affiliations
+## Table affiliations
 datagouv %>% 
   select(
     nnt, 
+    date_soutenance,
     code_etab,
     contains("etablissements"),
     contains("ecole"),
