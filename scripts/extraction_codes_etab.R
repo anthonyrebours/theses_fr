@@ -12,6 +12,7 @@
 library(rvest)
 library(tidyverse)
 library(janitor)
+library(fastLink)
 
 # Adresse et données ------------------------------------------------------
 
@@ -28,10 +29,12 @@ codes_etab <-
   .[[3]]
 
 ## Import des noms et identifiants de données datagouv
-list_etab_datagouv <- arrow::read_parquet(here::here("data", "datagouv_affiliations.parquet"))
+codes_etab <- rio::import(here::here("data", "codes_etab.xlsx"))
 
-list_etab_datagouv <- 
-  list_etab_datagouv %>% 
+etab_datagouv <- arrow::read_parquet(here::here("data", "datagouv_affiliations.parquet"))
+
+etab_datagouv <- 
+  etab_datagouv %>% 
   select(
     code_etab,
     etablissements_soutenance.0.nom, 
@@ -39,8 +42,8 @@ list_etab_datagouv <-
   ) %>% 
   distinct()
 
-nom_etab <- list_etab_datagouv %>% 
-  distinct(etablissements_soutenance.0.nom)
+nom_etab <- etab_datagouv %>% distinct(etablissements_soutenance.0.nom)
+
 nom_etab <- nom_etab$etablissements_soutenance.0.nom
   
 # Prétraitement des données -----------------------------------------------
@@ -65,16 +68,10 @@ codes_etab <-
   mutate(universites = str_remove_all(universites, "\\r\\n.*")) 
 
 
-
-# Appariemment etablissements abes et datagouv ----------------------------
-## Retrait code_etab absents des données de datagouv
-codes_existants <- codes_etab %>% 
-  filter(code %in% list_etab_datagouv$code_etab) 
-
-codes_etab %>% 
-  mutate(is_in_datagouv = ifelse(universites %in% nom_etab, universites, NA)) %>% print(n=233)
-
-
 # Export des données ------------------------------------------------------
 codes_etab %>% rio::export(here::here("data", "codes_etab.xlsx"))
+
+
+
+
 

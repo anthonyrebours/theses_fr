@@ -16,11 +16,22 @@ codes_etab <- rio::import(here::here("data", "codes_etab.xlsx")) %>% as_tibble()
 
 
 
-# Etablissement de soutenance ---------------------------------------------
+# Distinction établissements de soutenance/cotutelle ----------------------
+
+#' Dans le dump récupéré auprès de datagouv les données ne permettent pas de 
+#' distinguer entre établissements de soutenance et établissements de cotutelle, 
+#' pour obtenir cette vérification nous devons utiliser les codes etab des 
+#' thèses. 
+
 ## Vérification des code_etab
 affiliations %>% count(is.na(code_etab))
 
 affiliations %>% filter(is.na(code_etab)) %>% view()
+
+#' On cherche à vérifier que toutes les institutions disposent bien d'un code
+#' etab car cela va nous permettre de séparer établissements de soutenance vs 
+#' établissements de co-tutelle plus tard.Quand on repère des code_etab manquant 
+#' on les créé en reprenant l'information à partir du code nnt de la thèse
 
 ## Création de code_etab quand manquant
 affiliations <- 
@@ -33,7 +44,21 @@ affiliations <-
     )
   ) 
 
+## Vérification idref etablissements
+affiliations %>% 
+  count(etablissements_soutenance.0.nom, etablissements_soutenance.0.idref) %>% view()
+
 ## Création d'une variable etablissement_de_soutenance à partir des code_etab
+
+affiliations %>% 
+  anti_join(
+    codes_etab, 
+    by = c(
+      "code_etab" = "code",
+      "etablissements_soutenance.0.nom" = "universites"
+    )
+  ) %>% count(code_etab) %>% arrange(desc(n)) %>% view()
+
 affiliations %>% 
   left_join(codes_etab, by = c("code_etab" = "code")) %>% 
   janitor::get_dupes(nnt) %>% count(code_etab, etablissements_soutenance.0.nom) %>% view()
@@ -55,4 +80,52 @@ theses_fr_kr %>% view()
 
 
 setdiff(affiliations$code_etab, codes_etab$code)
-  
+
+
+# Appariemment etablissements abes et datagouv ----------------------------
+## Retrait code_etab absents des données de datagouv
+codes_existants <-
+  codes_etab %>% 
+  filter(code %in% etab_datagouv$code_etab) 
+
+## Appariemment probabiliste sur code etab présents dans données datagouv
+
+codes_existants <- 
+  codes_existants %>% 
+  rename(code_etab = code) %>% 
+  rownames_to_column()
+
+etab_datagouv <- 
+  etab_datagouv %>% 
+  rename(universites = etablissements_soutenance.0.nom) %>% 
+  rownames_to_column()
+
+fl_etab <- 
+  fastLink(
+    dfA = codes_existants,
+    dfB = etab_datagouv,
+    varnames = c("code_etab", "universites"),
+    stringdist.match = "universites"
+  )
+
+codes_corresp <- fl_etab$matches
+
+codes_corresp <- 
+  codes_corresp %>% 
+  mutate(across(everything(), as.character))
+
+codes_complets <- 
+  left_join(codes_existants, codes_corresp, by = c("rowname" = "inds.a"))
+
+codes_complets <- 
+  left_join(codes_complets, etab_datagouv, by = c("inds.b" = "rowname"))
+
+codes_manquants <- codes_complets %>% filter(is.na(universites.y)) 
+
+etab_datagouv %>% 
+  filter(code_etab %in% codes_manquants$code_etab.x) %>% 
+  count(code_etab, universites, etablissements_soutenance.0.idref) %>% view()
+
+
+
+
