@@ -1,0 +1,61 @@
+---
+format: gfm
+execute:
+  echo: false
+  message: false
+  warning: false
+prefer-html: true
+---
+
+```{r}
+## Packages
+pacman::p_load(
+  arrow,
+  tidyverse,
+  rio, 
+  here, 
+  dm,
+  DiagrammeR, 
+  DiagrammeRsvg,
+  fs
+)
+```
+
+
+
+```{r}
+dir_tree(recurse = 0)
+```
+
+<br>
+
+```{r}
+dir_tree("scripts")
+```
+
+<br>
+
+```{r}
+dir_tree("data")
+```
+
+<br>
+
+## Doublons
+
+La plupart des doublons sont du aux différences de signalement entre STAR et 
+Sudoc qui alimentent les données de theses.fr (voir guide de réutilisation des 
+données de theses.fr [disponible ici](https://www.data.gouv.fr/datasets/theses-soutenues-en-france-depuis-1985?resource_id=a826e757-a68a-46d5-8319-e784bb80ba73)). La différence entre ces deux sources 
+provient essentiellement du format d’enregistrement des thèses signalées dans 
+chacune de ces deux sources : imprimé dans le Sudoc et électronique dans STAR.
+De ce fait, une même thèse enregistré dans le Sudoc et dans STAR risque d’avoir
+des métadonnées différentes, notamment pour la variable accessibilité, et donc 
+d’être doublonée. Etant donné que les données saisies dans STAR sont généralement 
+plus complètes que celles du Sudoc (voir à nouveau guide de réutilisation), nous 
+avons choisi de ne conserver dans ces cas que les doublons ayant pour source STAR.
+
+Plus importants en revanche sont les cas de doublons pour lesquels on retrouve 
+des NNT similaires mais dont les auteurs sont différents. 
+Dans ces cas il est possible que la cause provienne ([ici](https://documentation.abes.fr/sudoc/regles/Catalogage/Retro_CodeCourt_NNT.htm))
+
+[lien doc codes etablissements](https://documentation.abes.fr/sudoc/regles/CodesUnivEtab.htm#LibellePoly)
