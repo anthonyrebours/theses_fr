@@ -15,23 +15,6 @@ library(glue)
 affiliations <- arrow::read_parquet(here::here("data", "01_datagouv", "processed", "affiliations.parquet"))
 codes_etab <- rio::import(here::here("data", "codes_etab.xlsx")) %>% as_tibble()
 
-  
-
-# Prétraitement -----------------------------------------------------------
-## Union des variables etablissements_soutenance
-for (i in 0:4) {
-  affiliations <- 
-    affiliations %>% 
-    unite(
-      !!glue("etab_soutenance_{i}"), 
-      c(!!glue("etablissements_soutenance.{i}.nom"), !!glue("etablissements_soutenance.{i}.idref")), 
-      sep = "|", 
-      na.rm = TRUE
-    )
-} 
-
-affiliations <- affiliations %>% mutate(across(contains("etab_"), ~ na_if(., "")))
-
 
 # Distinction établissements de soutenance/cotutelle ----------------------
 
@@ -48,7 +31,7 @@ affiliations %>% count(is.na(code_etab))
 affiliations %>% filter(is.na(code_etab)) %>% view()
 
 #' Quand on repère des code_etab manquant on en créé de nouveaux en reprenant 
-#' l'information à partir du code nnt de la thèse
+#' les informations contenues dans le code nnt de la thèse
 
 ## Création de code_etab quand manquant
 affiliations <- 
@@ -60,10 +43,6 @@ affiliations <-
       code_etab
     )
   ) 
-
-
-
-
 
 ## Vérification idref etablissements
 affiliations %>% 

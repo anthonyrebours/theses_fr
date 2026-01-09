@@ -34,7 +34,7 @@ datagouv <-
   datagouv %>% 
   mutate(
     across(
-      where(is.logical),
+      !where(is.Date),
       ~ as.character(.)
     )
   ) 
@@ -60,7 +60,7 @@ datagouv <-
 datagouv %>% filter(is.na(nnt)) %>% view()
 
 #' Nous avons détecter une seule thèses sans identifiant, nous avons choisi
-#' d'ajouter manuellement l'id en réutilisant la typologie adopté par 
+#' d'ajouter manuellement l'identifiant en réutilisant la typologie adopté par 
 #' thèses.fr
 datagouv <- 
   datagouv %>% 
@@ -72,23 +72,6 @@ datagouv <-
   mutate(auteur.nom = str_to_title(auteur.nom)) %>% 
   mutate(auteur.nom = stri_trans_general(auteur.nom, id = "Latin-ASCII"))
 
-## Vérification code_etab manquants
-datagouv %>% count(is.na(code_etab))
-
-#' On cherche à vérifier que toutes les institutions disposent bien d'un code
-#' etab car cela va nous permettre de séparer établissements de soutenance vs 
-#' établissements de co-tutelle plus tard.Quand on repère des code_etab manquant 
-#' on les créé en reprenant l'information à partir du code nnt de la thèse
-datagouv <- 
-  datagouv %>% 
-  mutate(
-    code_etab = ifelse(
-      is.na(code_etab),
-      str_sub(nnt, 5, 8),
-      code_etab
-    )
-  )
-
 
 # Corrections des doublons ------------------------------------------------
 ## Vérification des doublons
@@ -97,7 +80,7 @@ datagouv %>%
   select(nnt, accessible, contains("auteur"), source) 
 
 #' Certains doublons sont de véritables doublons qui sont
-#'  essentiellement dû à des différences de saisie entre STAR et le Sudoc, dans
+#' essentiellement dû à des différences de saisie entre STAR et le Sudoc, dans
 #' ces cas on souhaite privilégier les données de STAR qui sont les plus à jours 
 #' et contiennent le plus de métadonnées 
 datagouv <- 
@@ -120,7 +103,7 @@ datagouv %>%
   get_dupes(nnt) %>% 
   select(nnt, accessible, contains("auteur"), cas, source) 
 
-#' Parmi les doublons restants le cas ci-dessous provient d'une différence 
+#' Parmi ces doublons restants le cas ci-dessous provient d'une différence 
 #' d'écriture du nom et du prénom de l'auteur entre la version sudoc et STAR,
 #' on conserve manuellement la version STAR
 datagouv  <- datagouv %>% filter(!(nnt == "2022UPASL034" & source == "sudoc"))
@@ -173,32 +156,42 @@ datagouv %>%
     resumes.fr,
     resumes.en,
     resumes.autre.0,
-    contains("sujets_rameau"),
+    sujets_rameau,
     discipline
   ) %>% 
   write_parquet(here("data", "01_datagouv", "processed", "metadata.parquet"))
 
 ## Table individuals
+individuals_cols <- names(datagouv)[str_detect(names(datagouv), "auteur|membres|directeurs|rapporteurs|president")]
+
 datagouv %>% 
   select(
     nnt, 
-    contains("auteur"),
-    contains("directeurs"),
-    contains("membres"),
-    contains("president"),
-    contains("rapporteurs")
+    individuals_cols
+  ) %>% 
+  pivot_longer(
+    cols = individuals_cols,
+    names_to = "variables",
+    values_to = "valeurs",
+    values_drop_na = TRUE
   ) %>% 
   write_parquet(here("data", "01_datagouv", "processed", "individuals.parquet"))
 
 ## Table affiliations
+affiliations_cols <- names(datagouv)[str_detect(names(datagouv), "etablissements|ecoles|partenaires")]
+
 datagouv %>% 
   select(
     nnt, 
     date_soutenance,
     code_etab,
-    contains("etablissements"),
-    contains("ecole"),
-    contains("partenaires")
+    affiliations_cols
+  ) %>% 
+  pivot_longer(
+    cols = affiliations_cols,
+    names_to = "variables", 
+    values_to = "valeurs", 
+    values_drop_na = TRUE
   ) %>% 
   write_parquet(here("data", "01_datagouv", "processed", "affiliations.parquet"))
   
