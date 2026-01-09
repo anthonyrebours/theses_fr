@@ -21,7 +21,7 @@ library(stringi)
 
 # Données -----------------------------------------------------------------
 ## Chemin vers les données
-data_path <- here("data", "datagouv.parquet")
+data_path <- here("data", "01_datagouv", "raw", "datagouv.parquet")
 
 ## Import des données
 datagouv <- read_parquet(data_path) # Pour importer les données .parquet
@@ -176,7 +176,7 @@ datagouv %>%
     contains("sujets_rameau"),
     discipline
   ) %>% 
-  write_parquet(here("data", "datagouv_metadata.parquet"))
+  write_parquet(here("data", "01_datagouv", "processed", "metadata.parquet"))
 
 ## Table individuals
 datagouv %>% 
@@ -188,7 +188,7 @@ datagouv %>%
     contains("president"),
     contains("rapporteurs")
   ) %>% 
-  write_parquet(here("data", "datagouv_individuals.parquet"))
+  write_parquet(here("data", "01_datagouv", "processed", "individuals.parquet"))
 
 ## Table affiliations
 datagouv %>% 
@@ -200,7 +200,7 @@ datagouv %>%
     contains("ecole"),
     contains("partenaires")
   ) %>% 
-  write_parquet(here("data", "datagouv_affiliations.parquet"))
+  write_parquet(here("data", "01_datagouv", "processed", "affiliations.parquet"))
   
 
 

@@ -14,7 +14,7 @@ library(arrow)
 
 # URL et chemin de données ----------------------------------------------------
 lien_url <- "https://www.data.gouv.fr/fr/datasets/r/eb06a4f5-a9f1-4775-8226-33425c933272"
-data_path <- here::here("data", "datagouv.parquet")
+data_path <- here::here("data", "01_datagouv", "raw", "datagouv.parquet")
 
 
 # Téléchargement de données ---------------------------------------------------

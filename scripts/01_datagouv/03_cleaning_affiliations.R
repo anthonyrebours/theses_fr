@@ -12,7 +12,7 @@ library(glue)
 
 
 # Données -----------------------------------------------------------------
-affiliations <- arrow::read_parquet(here::here("data", "datagouv_affiliations.parquet"))
+affiliations <- arrow::read_parquet(here::here("data", "01_datagouv", "processed", "affiliations.parquet"))
 codes_etab <- rio::import(here::here("data", "codes_etab.xlsx")) %>% as_tibble()
 
   

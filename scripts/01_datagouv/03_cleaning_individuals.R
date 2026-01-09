@@ -9,7 +9,7 @@
 library(tidyverse)
 library(janitor)
 
-individuals <- arrow::read_parquet(here::here("data", "datagouv_individuals.parquet"))
+individuals <- arrow::read_parquet(here::here("data", "01_datagouv", "processed", "individuals.parquet"))
 
 
 # Fusion des variables individuelles --------------------------------------
