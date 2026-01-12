@@ -24,6 +24,7 @@ affiliations <- affiliations %>% select(-order)
 ##  Retrait données manquantes lorsque ni nom ni idref disponibles
 affiliations <- affiliations %>% filter(!c(is.na(nom) & is.na(idref)))
 
+
 # Distinction établissements de soutenance/cotutelle ----------------------
 
 #' Dans le dump récupéré auprès de datagouv les données ne permettent pas de 
@@ -52,30 +53,39 @@ affiliations <-
     )
   ) 
 
-## Vérification idref etablissements
-affiliations %>% 
-  count(etablissements_soutenance.0.nom, etablissements_soutenance.0.idref) %>% view()
+## Vérification code_etab
+setdiff(affiliations$code_etab, codes_etab$code)
 
 ## Création d'une variable etablissement_de_soutenance à partir des code_etab
+affiliations <- 
+  affiliations %>% 
+  left_join(codes_etab, by = c("code_etab" = "code")) 
 
-affiliations %>% 
-  anti_join(
-    codes_etab, 
-    by = c(
-      "code_etab" = "code",
-      "etablissements_soutenance.0.nom" = "universites"
-    ) 
-  ) %>% count(code_etab) %>% arrange(desc(n)) %>% view()
+## Correction code_etab
+affiliations <- 
+  affiliations %>% 
+  mutate(
+    code_etab = recode(
+      code_etab, 
+      "LY02" = "LYO2",
+      "MET2" = "METZ", 
+      "TO41" = "TOU1", 
+      "BLOB" = "GLOB", 
+      "HESE" = "HESA"
+    )
+  )
 
-affiliations %>% 
-  left_join(codes_etab, by = c("code_etab" = "code")) %>% 
-  janitor::get_dupes(nnt) %>% count(code_etab, etablissements_soutenance.0.nom) %>% view()
+## Vérification différences codes_etab
+affiliations %>% filter(is.na(universites)) %>% view()
+
 
 univ_missing <- 
+  affiliations %>% 
+  filter(role == "etablissements_soutenance") %>% 
   setdiff(
-    affiliations$etablissements_soutenance.0.nom, 
     codes_etab$universites
   )
+
 
 affiliations %>% 
   filter(
@@ -89,6 +99,9 @@ theses_fr_kr %>% view()
 
 setdiff(affiliations$code_etab, codes_etab$code)
 
+## Vérification idref etablissements
+affiliations %>% 
+  count(paris, idref) %>% view()
 
 # Appariemment etablissements abes et datagouv ----------------------------
 ## Retrait code_etab absents des données de datagouv
