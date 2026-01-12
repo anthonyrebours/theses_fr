@@ -72,6 +72,12 @@ datagouv <-
   mutate(auteur.nom = str_to_title(auteur.nom)) %>% 
   mutate(auteur.nom = stri_trans_general(auteur.nom, id = "Latin-ASCII"))
 
+## Retrait de thèses associées à Etablissement de Formation 1
+
+#' Les données associées aux thèses soutenues dans cet établissement comportent
+#' des valeurs incohérentes, il s'agit probablement de test des équipes de l'ABES 
+
+datagouv <- datagouv %>% filter(!grepl("FOR1", nnt)) 
 
 # Corrections des doublons ------------------------------------------------
 ## Vérification des doublons
