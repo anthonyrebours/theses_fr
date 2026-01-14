@@ -56,11 +56,6 @@ affiliations <-
 ## Vérification code_etab
 setdiff(affiliations$code_etab, codes_etab$code)
 
-## Création d'une variable etablissement_de_soutenance à partir des code_etab
-affiliations <- 
-  affiliations %>% 
-  left_join(codes_etab, by = c("code_etab" = "code")) 
-
 ## Correction code_etab
 affiliations <- 
   affiliations %>% 
@@ -74,6 +69,11 @@ affiliations <-
       "HESE" = "HESA"
     )
   )
+
+## Création d'une variable etablissement_de_soutenance à partir des code_etab
+affiliations <- 
+  affiliations %>% 
+  left_join(codes_etab, by = c("code_etab" = "code")) 
 
 ## Vérification différences codes_etab
 affiliations %>% filter(is.na(universites)) %>% view()
@@ -101,7 +101,7 @@ setdiff(affiliations$code_etab, codes_etab$code)
 
 ## Vérification idref etablissements
 affiliations %>% 
-  count(paris, idref) %>% view()
+  count(nom, idref) %>% view()
 
 # Appariemment etablissements abes et datagouv ----------------------------
 ## Retrait code_etab absents des données de datagouv
