@@ -16,13 +16,27 @@ codes_etab <- rio::import(here::here("data", "codes_etab.xlsx")) %>% as_tibble()
 
 
 # Pré-traitement données --------------------------------------------------
-## Restructurations variables
-affiliations <- affiliations %>% separate(variables, c("role", "order", "info"), sep = "\\.")
-affiliations <- affiliations %>% pivot_wider(names_from = "info", values_from = "valeurs")
-affiliations <- affiliations %>% select(-order)
+## Filtre ecoles veterinaires table codes-etab
+codes_etab <- 
+  codes_etab %>% 
+  filter(
+    universite != "Ecole nationale vétérinaire - Toulouse" 
+    & universite != "Ecole nationale vétérinaire - Lyon"
+    & universite != "Ecole nationale vétérinaire - Nantes"
+  ) 
 
-##  Retrait données manquantes lorsque ni nom ni idref disponibles
-affiliations <- affiliations %>% filter(!c(is.na(nom) & is.na(idref)))
+## Restructurations variables
+
+affiliations <- 
+  affiliations %>% 
+  separate(variables, c("role", "order", "info"), sep = "\\.")
+
+affiliations <- 
+  affiliations %>%  
+  pivot_wider(
+    names_from = "info", 
+    values_from = "valeurs" 
+  ) 
 
 
 # Distinction établissements de soutenance/cotutelle ----------------------
@@ -70,82 +84,55 @@ affiliations <-
     )
   )
 
-## Création d'une variable etablissement_de_soutenance à partir des code_etab
-affiliations <- 
-  affiliations %>% 
-  left_join(codes_etab, by = c("code_etab" = "code")) 
-
-## Vérification différences codes_etab
-affiliations %>% filter(is.na(universites)) %>% view()
-
-
-univ_missing <- 
+##
+etab_soutenance <- 
   affiliations %>% 
   filter(role == "etablissements_soutenance") %>% 
-  setdiff(
-    codes_etab$universites
-  )
-
-
-affiliations %>% 
-  filter(
-    etablissements_soutenance.0.nom %in% univ_missing &
-    is.na(etablissements_soutenance.0.idref)
-  ) %>% distinct(etablissements_soutenance.0.nom)
+  mutate(nnt_nbr = n(), .by = nnt)  %>% 
+  select(-c(order, type)) %>% 
+  left_join(codes_etab, by = c("code_etab" = "code"))
   
-names(affiliations)
-theses_fr_kr %>% view()
+##
+etab_soutenance %>% count(is.na(idref ))
+
+##
+good_idref <- 
+  etab_soutenance %>% 
+  filter(idref == idref_ancien) %>% 
+  distinct(nnt)
+
+wrong_idref <- 
+  etab_soutenance %>% 
+  filter(!nnt %in% good_idref$nnt)
+
+## Vérification différences codes_etab
+etab_soutenance %>% filter(is.na(universites)) %>% view()
 
 
-setdiff(affiliations$code_etab, codes_etab$code)
+etab_soutenance %>% 
+  mutate(
+    idref = ifelse(
+      is.na(idref), 
+      case_when(
+        nom == universite ~ idref_ancien, 
+        TRUE ~ idref
+      ), 
+      idref
+    )
+  ) %>% count(is.na(idref))
 
-## Vérification idref etablissements
-affiliations %>% 
-  count(nom, idref) %>% view()
+wrong_idref %>% 
+  mutate(
+    idref = case_when(
+      nom == universite ~ idref_ancien,
+      TRUE ~ idref
+    )
+  ) %>%
+  filter(idref == idref_ancien) %>% 
+  count()
 
-# Appariemment etablissements abes et datagouv ----------------------------
-## Retrait code_etab absents des données de datagouv
-codes_existants <-
-  codes_etab %>% 
-  filter(code %in% etab_datagouv$code_etab) 
 
-## Appariemment probabiliste sur code etab présents dans données datagouv
 
-codes_existants <- 
-  codes_existants %>% 
-  rename(code_etab = code) %>% 
-  rownames_to_column()
-
-etab_datagouv <- 
-  etab_datagouv %>% 
-  rename(universites = etablissements_soutenance.0.nom) %>% 
-  rownames_to_column()
-
-fl_etab <- 
-  fastLink(
-    dfA = codes_existants,
-    dfB = etab_datagouv,
-    varnames = c("code_etab", "universites"),
-    stringdist.match = "universites"
-  )
-
-codes_corresp <- fl_etab$matches
-
-codes_corresp <- 
-  codes_corresp %>% 
-  mutate(across(everything(), as.character))
-
-codes_complets <- 
-  left_join(codes_existants, codes_corresp, by = c("rowname" = "inds.a"))
-
-codes_complets <- 
-  left_join(codes_complets, etab_datagouv, by = c("inds.b" = "rowname"))
-
-codes_manquants <- codes_complets %>% filter(is.na(universites.y)) 
-
-etab_datagouv %>% 
-  filter(code_etab %in% codes_manquants$code_etab.x) %>% 
-  count(code_etab, universites, etablissements_soutenance.0.idref) %>% view()
 
 
 
